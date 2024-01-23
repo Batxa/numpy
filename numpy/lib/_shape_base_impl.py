@@ -1,15 +1,16 @@
 import functools
 import warnings
 
-import numpy.core.numeric as _nx
-from numpy.core.numeric import asarray, zeros, array, asanyarray
-from numpy.core.fromnumeric import reshape, transpose
-from numpy.core.multiarray import normalize_axis_index
-from numpy.core import overrides
-from numpy.core import vstack, atleast_3d
-from numpy.core.numeric import normalize_axis_tuple
-from numpy.core.overrides import set_module
-from numpy.core.shape_base import _arrays_for_stack_dispatcher
+import numpy._core.numeric as _nx
+from numpy._core.numeric import asarray, zeros, zeros_like, array, asanyarray
+from numpy._core.fromnumeric import reshape, transpose
+from numpy._core.multiarray import normalize_axis_index
+from numpy._core._multiarray_umath import _array_converter
+from numpy._core import overrides
+from numpy._core import vstack, atleast_3d
+from numpy._core.numeric import normalize_axis_tuple
+from numpy._core.overrides import set_module
+from numpy._core.shape_base import _arrays_for_stack_dispatcher
 from numpy.lib._index_tricks_impl import ndindex
 from numpy.matrixlib.defmatrix import matrix  # this raises all the right alarm bells
 
@@ -358,7 +359,9 @@ def apply_along_axis(func1d, axis, arr, *args, **kwargs):
             [0, 0, 9]]])
     """
     # handle negative axes
-    arr = asanyarray(arr)
+    conv = _array_converter(arr)
+    arr = conv[0]
+
     nd = arr.ndim
     axis = normalize_axis_index(axis, nd)
 
@@ -384,7 +387,11 @@ def apply_along_axis(func1d, axis, arr, *args, **kwargs):
     # remove the requested axis, and add the new ones on the end.
     # laid out so that each write is contiguous.
     # for a tuple index inds, buff[inds] = func1d(inarr_view[inds])
-    buff = zeros(inarr_view.shape[:-1] + res.shape, res.dtype)
+    if not isinstance(res, matrix):
+        buff = zeros_like(res, shape=inarr_view.shape[:-1] + res.shape)
+    else:
+        # Matrices are nasty with reshaping, so do not preserve them here.
+        buff = zeros(inarr_view.shape[:-1] + res.shape, dtype=res.dtype)
 
     # permutation of axes such that out = buff.transpose(buff_permute)
     buff_dims = list(range(buff.ndim))
@@ -394,26 +401,13 @@ def apply_along_axis(func1d, axis, arr, *args, **kwargs):
         buff_dims[axis : buff.ndim-res.ndim]
     )
 
-    # matrices have a nasty __array_prepare__ and __array_wrap__
-    if not isinstance(res, matrix):
-        buff = res.__array_prepare__(buff)
-
     # save the first result, then compute and save all remaining results
     buff[ind0] = res
     for ind in inds:
         buff[ind] = asanyarray(func1d(inarr_view[ind], *args, **kwargs))
 
-    if not isinstance(res, matrix):
-        # wrap the array, to preserve subclasses
-        buff = res.__array_wrap__(buff)
-
-        # finally, rotate the inserted axes back to where they belong
-        return transpose(buff, buff_permute)
-
-    else:
-        # matrices have to be transposed first, because they collapse dimensions!
-        out_arr = transpose(buff, buff_permute)
-        return res.__array_wrap__(out_arr)
+    res = transpose(buff, buff_permute)
+    return conv.wrap(res)
 
 
 def _apply_over_axes_dispatcher(func, a, axes):
@@ -726,8 +720,8 @@ def dstack(tup):
 
     """
     arrs = atleast_3d(*tup)
-    if not isinstance(arrs, list):
-        arrs = [arrs]
+    if not isinstance(arrs, tuple):
+        arrs = (arrs,)
     return _nx.concatenate(arrs, 2)
 
 
@@ -764,11 +758,11 @@ def array_split(ary, indices_or_sections, axis=0):
     --------
     >>> x = np.arange(8.0)
     >>> np.array_split(x, 3)
-    [array([0.,  1.,  2.]), array([3.,  4.,  5.]), array([6.,  7.])]
+    (array([0.,  1.,  2.]), array([3.,  4.,  5.]), array([6.,  7.]))
 
     >>> x = np.arange(9)
     >>> np.array_split(x, 4)
-    [array([0, 1, 2]), array([3, 4]), array([5, 6]), array([7, 8])]
+    (array([0, 1, 2]), array([3, 4]), array([5, 6]), array([7, 8]))
 
     """
     try:
@@ -797,7 +791,7 @@ def array_split(ary, indices_or_sections, axis=0):
         end = div_points[i + 1]
         sub_arys.append(_nx.swapaxes(sary[st:end], axis, 0))
 
-    return sub_arys
+    return tuple(sub_arys)
 
 
 def _split_dispatcher(ary, indices_or_sections, axis=None):
@@ -833,8 +827,8 @@ def split(ary, indices_or_sections, axis=0):
 
     Returns
     -------
-    sub-arrays : list of ndarrays
-        A list of sub-arrays as views into `ary`.
+    sub-arrays : tuple of ndarrays
+        A tuple of sub-arrays as views into `ary`.
 
     Raises
     ------
@@ -860,15 +854,15 @@ def split(ary, indices_or_sections, axis=0):
     --------
     >>> x = np.arange(9.0)
     >>> np.split(x, 3)
-    [array([0.,  1.,  2.]), array([3.,  4.,  5.]), array([6.,  7.,  8.])]
+    (array([0.,  1.,  2.]), array([3.,  4.,  5.]), array([6.,  7.,  8.]))
 
     >>> x = np.arange(8.0)
     >>> np.split(x, [3, 5, 6, 10])
-    [array([0.,  1.,  2.]),
+    (array([0.,  1.,  2.]),
      array([3.,  4.]),
      array([5.]),
      array([6.,  7.]),
-     array([], dtype=float64)]
+     array([], dtype=float64))
 
     """
     try:
@@ -908,24 +902,21 @@ def hsplit(ary, indices_or_sections):
            [ 8.,   9.,  10.,  11.],
            [12.,  13.,  14.,  15.]])
     >>> np.hsplit(x, 2)
-    [array([[  0.,   1.],
-           [  4.,   5.],
-           [  8.,   9.],
-           [12.,  13.]]),
-     array([[  2.,   3.],
-           [  6.,   7.],
-           [10.,  11.],
-           [14.,  15.]])]
+    (array([[ 0.,  1.],
+           [ 4.,  5.],
+           [ 8.,  9.],
+           [12., 13.]]), array([[ 2.,  3.],
+           [ 6.,  7.],
+           [10., 11.],
+           [14., 15.]]))
     >>> np.hsplit(x, np.array([3, 6]))
-    [array([[ 0.,   1.,   2.],
-           [ 4.,   5.,   6.],
-           [ 8.,   9.,  10.],
-           [12.,  13.,  14.]]),
-     array([[ 3.],
+    (array([[ 0.,  1.,  2.],
+           [ 4.,  5.,  6.],
+           [ 8.,  9., 10.],
+           [12., 13., 14.]]), array([[ 3.],
            [ 7.],
            [11.],
-           [15.]]),
-     array([], shape=(4, 0), dtype=float64)]
+           [15.]]), array([], shape=(4, 0), dtype=float64))
 
     With a higher dimensional array the split is still along the second axis.
 
@@ -936,16 +927,16 @@ def hsplit(ary, indices_or_sections):
            [[4.,  5.],
             [6.,  7.]]])
     >>> np.hsplit(x, 2)
-    [array([[[0.,  1.]],
+    (array([[[0.,  1.]],
            [[4.,  5.]]]),
      array([[[2.,  3.]],
-           [[6.,  7.]]])]
+           [[6.,  7.]]]))
 
     With a 1-D array, the split is along axis 0.
 
     >>> x = np.array([0, 1, 2, 3, 4, 5])
     >>> np.hsplit(x, 2)
-    [array([0, 1, 2]), array([3, 4, 5])]
+    (array([0, 1, 2]), array([3, 4, 5]))
 
     """
     if _nx.ndim(ary) == 0:
@@ -978,13 +969,15 @@ def vsplit(ary, indices_or_sections):
            [ 8.,   9.,  10.,  11.],
            [12.,  13.,  14.,  15.]])
     >>> np.vsplit(x, 2)
-    [array([[0., 1., 2., 3.],
+    (array([[0., 1., 2., 3.],
            [4., 5., 6., 7.]]), array([[ 8.,  9., 10., 11.],
-           [12., 13., 14., 15.]])]
+           [12., 13., 14., 15.]]))
     >>> np.vsplit(x, np.array([3, 6]))
-    [array([[ 0.,  1.,  2.,  3.],
-           [ 4.,  5.,  6.,  7.],
-           [ 8.,  9., 10., 11.]]), array([[12., 13., 14., 15.]]), array([], shape=(0, 4), dtype=float64)]
+    (array([[ 0.,  1.,  2.,  3.],
+            [ 4.,  5.,  6.,  7.],
+            [ 8.,  9., 10., 11.]]),
+     array([[12., 13., 14., 15.]]),
+     array([], shape=(0, 4), dtype=float64))
 
     With a higher dimensional array the split is still along the first axis.
 
@@ -995,9 +988,9 @@ def vsplit(ary, indices_or_sections):
            [[4.,  5.],
             [6.,  7.]]])
     >>> np.vsplit(x, 2)
-    [array([[[0., 1.],
+    (array([[[0., 1.],
             [2., 3.]]]), array([[[4., 5.],
-            [6., 7.]]])]
+            [6., 7.]]]))
 
     """
     if _nx.ndim(ary) < 2:
@@ -1027,15 +1020,15 @@ def dsplit(ary, indices_or_sections):
            [[ 8.,   9.,  10.,  11.],
             [12.,  13.,  14.,  15.]]])
     >>> np.dsplit(x, 2)
-    [array([[[ 0.,  1.],
+    (array([[[ 0.,  1.],
             [ 4.,  5.]],
            [[ 8.,  9.],
             [12., 13.]]]), array([[[ 2.,  3.],
             [ 6.,  7.]],
            [[10., 11.],
-            [14., 15.]]])]
+            [14., 15.]]]))
     >>> np.dsplit(x, np.array([3, 6]))
-    [array([[[ 0.,   1.,   2.],
+    (array([[[ 0.,   1.,   2.],
             [ 4.,   5.,   6.]],
            [[ 8.,   9.,  10.],
             [12.,  13.,  14.]]]),
@@ -1043,7 +1036,7 @@ def dsplit(ary, indices_or_sections):
             [ 7.]],
            [[11.],
             [15.]]]),
-    array([], shape=(2, 2, 0), dtype=float64)]
+    array([], shape=(2, 2, 0), dtype=float64))
     """
     if _nx.ndim(ary) < 3:
         raise ValueError('dsplit only works on arrays of 3 or more dimensions')

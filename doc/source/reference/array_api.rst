@@ -1,7 +1,7 @@
 .. _array_api:
 
 ********************************
-Array API Standard Compatibility
+Array API standard compatibility
 ********************************
 
 .. note::
@@ -32,7 +32,7 @@ standard is implemented.
 
 .. _array_api-differences:
 
-Table of Differences between ``numpy.array_api`` and ``numpy``
+Table of differences between ``numpy.array_api`` and ``numpy``
 ==============================================================
 
 This table outlines the primary differences between ``numpy.array_api`` from
@@ -51,7 +51,7 @@ the main ``numpy`` namespace. There are three types of differences:
 3. **Breaking**. Things that would break backwards compatibility if
    implemented in the main ``numpy`` namespace.
 
-Name Differences
+Name differences
 ----------------
 
 Many functions have been renamed in the spec from NumPy. These are otherwise
@@ -59,93 +59,6 @@ identical in behavior, and are thus all **compatible** changes, unless
 otherwise noted.
 
 .. _array_api-name-changes:
-
-Function Name Changes
-~~~~~~~~~~~~~~~~~~~~~
-
-The following functions are named differently in the array API
-
-.. list-table::
-   :header-rows: 1
-
-   * - Array API name
-     - NumPy namespace name
-     - Notes
-   * - ``acos``
-     - ``arccos``
-     -
-   * - ``acosh``
-     - ``arccosh``
-     -
-   * - ``asin``
-     - ``arcsin``
-     -
-   * - ``asinh``
-     - ``arcsinh``
-     -
-   * - ``atan``
-     - ``arctan``
-     -
-   * - ``atan2``
-     - ``arctan2``
-     -
-   * - ``atanh``
-     - ``arctanh``
-     -
-   * - ``bitwise_left_shift``
-     - ``left_shift``
-     -
-   * - ``bitwise_invert``
-     - ``invert``
-     -
-   * - ``bitwise_right_shift``
-     - ``right_shift``
-     -
-   * - ``bool``
-     - ``bool_``
-     - This is **breaking** because ``np.bool`` is currently a deprecated
-       alias for the built-in ``bool``.
-   * - ``concat``
-     - ``concatenate``
-     -
-   * - ``matrix_norm`` and ``vector_norm``
-     - ``norm``
-     - ``matrix_norm`` and ``vector_norm`` each do a limited subset of what
-       ``np.norm`` does.
-   * - ``permute_dims``
-     - ``transpose``
-     - Unlike ``np.transpose``, the ``axis`` keyword-argument to
-       ``permute_dims`` is required.
-   * - ``pow``
-     - ``power``
-     -
-   * - ``unique_all``, ``unique_counts``, ``unique_inverse``, and
-       ``unique_values``
-     - ``unique``
-     - Each is equivalent to ``np.unique`` with certain flags set.
-
-
-Function instead of method
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-- ``astype`` is a function in the array API, whereas it is a method on
-  ``ndarray`` in ``numpy``.
-
-
-``linalg`` Namespace Differences
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-These functions are in the ``linalg`` sub-namespace in the array API, but are
-only in the top-level namespace in NumPy:
-
-- ``cross``
-- ``diagonal``
-- ``matmul`` (*)
-- ``outer``
-- ``tensordot`` (*)
-- ``trace``
-
-(*): These functions are also in the top-level namespace in the array API.
 
 Keyword Argument Renames
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -186,10 +99,6 @@ functions to include additional keyword arguments from those required.
      - The definitions of ``rtol`` and ``rcond`` are the same, but their
        default values differ, making this **breaking**. See
        :ref:`array_api-linear-algebra-differences`.
-   * - ``std`` and ``var``
-     - ``correction``
-     - ``ddof``
-     -
    * - ``reshape``
      - ``shape``
      - ``newshape``
@@ -198,7 +107,7 @@ functions to include additional keyword arguments from those required.
 
 .. _array_api-type-promotion-differences:
 
-Type Promotion Differences
+Type promotion differences
 --------------------------
 
 Type promotion is the biggest area where NumPy deviates from the spec. The
@@ -267,7 +176,7 @@ independently of values or shapes.
      - **Breaking**
      -
 
-Indexing Differences
+Indexing differences
 --------------------
 
 The spec requires only a subset of indexing, but all indexing rules in the
@@ -299,7 +208,7 @@ spec are compatible with NumPy's more broad indexing rules.
 
 .. _array_api-type-strictness:
 
-Type Strictness
+Type strictness
 ---------------
 
 Functions in ``numpy.array_api`` restrict their inputs to only those dtypes
@@ -538,7 +447,7 @@ outlined in the spec
 (see :ref:`array_api-type-promotion-differences`).
 
 
-Array Object Differences
+Array object differences
 ------------------------
 
 .. list-table::
@@ -576,7 +485,7 @@ Array Object Differences
      - **Compatible**
      - The methods would effectively not do anything since NumPy is CPU only
 
-Creation Functions Differences
+Creation functions differences
 ------------------------------
 
 .. list-table::
@@ -588,14 +497,8 @@ Creation Functions Differences
    * - ``copy`` keyword argument to ``asarray``
      - **Compatible**
      -
-   * - New ``device`` keyword argument to all array creation functions
-       (``asarray``, ``arange``, ``empty``, ``empty_like``, ``eye``, ``full``,
-       ``full_like``, ``linspace``, ``ones``, ``ones_like``, ``zeros``, and
-       ``zeros_like``).
-     - **Compatible**
-     - ``device`` would effectively do nothing, since NumPy is CPU only.
 
-Elementwise Functions Differences
+Elementwise functions differences
 ---------------------------------
 
 .. list-table::
@@ -623,7 +526,7 @@ Elementwise Functions Differences
 
 .. _array_api-linear-algebra-differences:
 
-Linear Algebra Differences
+Linear algebra differences
 --------------------------
 
 .. list-table::
@@ -632,9 +535,6 @@ Linear Algebra Differences
    * - Feature
      - Type
      - Notes
-   * - ``cholesky`` includes an ``upper`` keyword argument.
-     - **Compatible**
-     -
    * - ``cross`` does not allow size 2 vectors (only size 3).
      - **Breaking**
      -
@@ -688,9 +588,6 @@ Linear Algebra Differences
        specification issue
        <https://github.com/data-apis/array-api/issues/285>`__ for more
        details.
-   * - New function ``svdvals``.
-     - **Compatible**
-     - Equivalent to ``np.linalg.svd(compute_uv=False)``.
    * - The ``axis`` keyword to ``tensordot`` must be a tuple.
      - **Compatible**
      - In ``np.tensordot``, it can also be an array or array-like.
@@ -699,7 +596,7 @@ Linear Algebra Differences
      - ``np.trace`` operates on the first two axes by default. Note that the
        array API ``trace`` does not allow specifying which axes to operate on.
 
-Manipulation Functions Differences
+Manipulation functions differences
 ----------------------------------
 
 .. list-table::
@@ -725,7 +622,21 @@ Manipulation Functions Differences
      - **Compatible**
      - See https://github.com/numpy/numpy/issues/9818.
 
-Set Functions Differences
+Searching functions differences
+-------------------------------
+
+.. list-table::
+   :header-rows: 1
+
+   * - Feature
+     - Type
+     - Notes
+   * - ``nonzero`` disallows 0-dimensional inputs
+     - **Breaking**
+     - This behavior is already deprecated for ``np.nonzero``. See
+       https://github.com/numpy/numpy/pull/13708.
+
+Set functions differences
 -------------------------
 
 .. list-table::
@@ -748,8 +659,8 @@ Set Functions Differences
 
 .. _array_api-set-functions-differences:
 
-Set Functions Differences
--------------------------
+Sorting functions differences
+-----------------------------
 
 .. list-table::
    :header-rows: 1
@@ -770,7 +681,7 @@ Set Functions Differences
      - **Compatible**
      -
 
-Statistical Functions Differences
+Statistical functions differences
 ---------------------------------
 
 .. list-table::
@@ -788,7 +699,7 @@ Statistical Functions Differences
      - **Compatible**
      -
 
-Other Differences
+Other differences
 -----------------
 
 .. list-table::
@@ -801,6 +712,16 @@ Other Differences
      - **Strictness**
      - For example, ``numpy.array_api.asarray([0], dtype='int32')`` is not
        allowed.
+   * - Dtype objects are wrapped so that they only implement the required
+       ``__eq__`` method, which only compares against dtype objects.
+     - **Strictness**
+     - For example, ``float32 == 'float32'`` is not allowed.
+   * - ``arr.device`` always returns a ``CPU_DEVICE`` object (which is not
+       part of the namespace). This is the only valid non-default value for
+       ``device`` keyword arguments to creation functions like ``asarray()``.
+     - **Compatible**
+     - CPU is the only device supported by NumPy. The standard does not
+       require device objects to be accessible other than via ``arr.device``.
    * - ``asarray`` is not implicitly called in any function.
      - **Strictness**
      - The exception is Python operators, which accept Python scalars in

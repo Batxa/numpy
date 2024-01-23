@@ -423,7 +423,7 @@ class CustomScalar(Benchmark):
 
 class CustomComparison(Benchmark):
     params = (np.int8,  np.int16,  np.int32,  np.int64, np.uint8, np.uint16,
-              np.uint32, np.uint64, np.float32, np.float64, np.bool_)
+              np.uint32, np.uint64, np.float32, np.float64, np.bool)
     param_names = ['dtype']
 
     def setup(self, dtype):
@@ -442,7 +442,7 @@ class CustomComparison(Benchmark):
 
 
 class CustomScalarFloorDivideInt(Benchmark):
-    params = (np.core.sctypes['int'],
+    params = (np._core.sctypes['int'],
               [8, -8, 43, -43])
     param_names = ['dtype', 'divisors']
 
@@ -456,7 +456,7 @@ class CustomScalarFloorDivideInt(Benchmark):
 
 
 class CustomScalarFloorDivideUInt(Benchmark):
-    params = (np.core.sctypes['uint'],
+    params = (np._core.sctypes['uint'],
               [8, 43])
     param_names = ['dtype', 'divisors']
 
@@ -470,7 +470,7 @@ class CustomScalarFloorDivideUInt(Benchmark):
 
 
 class CustomArrayFloorDivideInt(Benchmark):
-    params = (np.core.sctypes['int'] + np.core.sctypes['uint'],
+    params = (np._core.sctypes['int'] + np._core.sctypes['uint'],
               [100, 10000, 1000000])
     param_names = ['dtype', 'size']
 

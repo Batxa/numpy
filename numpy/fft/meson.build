@@ -3,8 +3,8 @@ if host_machine.system() == 'aix' or host_machine.system() == 'AIX'
   largefile_define += '-D_LARGE_FILES'
 endif
 
-py.extension_module('_pocketfft_internal',
-  '_pocketfft.c',
+py.extension_module('_pocketfft_umath',
+  ['_pocketfft_umath.c', 'pocketfft/pocketfft.c'],
   c_args: largefile_define,
   dependencies: np_core_dep,
   install: true,
@@ -17,8 +17,9 @@ py.install_sources(
     '__init__.pyi',
     '_pocketfft.py',
     '_pocketfft.pyi',
+    '_helper.py',
+    '_helper.pyi',
     'helper.py',
-    'helper.pyi',
   ],
   subdir: 'numpy/fft'
 )

@@ -7,6 +7,8 @@ import pathlib
 import shutil
 import json
 import pathlib
+import importlib
+import subprocess
 
 import click
 from spin import util
@@ -23,6 +25,59 @@ if not meson_import_dir.exists():
     )
 
 
+def _get_numpy_tools(filename):
+    filepath = pathlib.Path('tools', filename)
+    spec = importlib.util.spec_from_file_location(filename.stem, filepath)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@click.command()
+@click.argument(
+    "token",
+    required=True
+)
+@click.argument(
+    "revision-range",
+    required=True
+)
+@click.pass_context
+def changelog(ctx, token, revision_range):
+    """👩 Get change log for provided revision range
+
+    \b
+    Example:
+
+    \b
+    $ spin authors -t $GH_TOKEN --revision-range v1.25.0..v1.26.0
+    """
+    try:
+        from github.GithubException import GithubException
+        from git.exc import GitError
+        changelog = _get_numpy_tools(pathlib.Path('changelog.py'))
+    except ModuleNotFoundError as e:
+        raise click.ClickException(
+            f"{e.msg}. Install the missing packages to use this command."
+        )
+    click.secho(
+        f"Generating change log for range {revision_range}",
+        bold=True, fg="bright_green",
+    )
+    try:
+        changelog.main(token, revision_range)
+    except GithubException as e:
+        raise click.ClickException(
+            f"GithubException raised with status: {e.status} "
+            f"and message: {e.data['message']}"
+        )
+    except GitError as e:
+        raise click.ClickException(
+            f"Git error in command `{' '.join(e.command)}` "
+            f"with error message: {e.stderr}"
+        )
+
+
 @click.command()
 @click.option(
     "-j", "--jobs",
@@ -37,9 +92,14 @@ if not meson_import_dir.exists():
     "-v", "--verbose", is_flag=True,
     help="Print all build output, even installation"
 )
+@click.option(
+    "--with-scipy-openblas", type=click.Choice(["32", "64"]),
+    default=None,
+    help="Build with pre-installed scipy-openblas32 or scipy-openblas64 wheel"
+)
 @click.argument("meson_args", nargs=-1)
 @click.pass_context
-def build(ctx, meson_args, jobs=None, clean=False, verbose=False, quiet=False):
+def build(ctx, meson_args, with_scipy_openblas, jobs=None, clean=False, verbose=False, quiet=False):
     """🔧 Build package with Meson/ninja and install
 
     MESON_ARGS are passed through e.g.:
@@ -53,6 +113,10 @@ def build(ctx, meson_args, jobs=None, clean=False, verbose=False, quiet=False):
 
     CFLAGS="-O0 -g" spin build
     """
+    # XXX keep in sync with upstream build
+    if with_scipy_openblas:
+        _config_openblas(with_scipy_openblas)
+    ctx.params.pop("with_scipy_openblas", None)
     ctx.forward(meson.build)
 
 
@@ -254,6 +318,47 @@ def _run_asv(cmd):
 
     util.run(cmd, cwd='benchmarks', env=env)
 
+@click.command()
+@click.option(
+    "-b", "--branch",
+    metavar='branch',
+    default="main",
+)
+@click.option(
+    '--uncommitted',
+    is_flag=True,
+    default=False,
+    required=False,
+)
+@click.pass_context
+def lint(ctx, branch, uncommitted):
+    """🔦 Run lint checks on diffs.
+    Provide target branch name or `uncommitted` to check changes before committing:
+
+    \b
+    Examples:
+
+    \b
+    For lint checks of your development brach with `main` or a custom branch:
+
+    \b
+    $ spin lint # defaults to main
+    $ spin lint --branch custom_branch
+
+    \b
+    To check just the uncommitted changes before committing
+
+    \b
+    $ spin lint --uncommitted
+    """
+    try:
+        linter = _get_numpy_tools(pathlib.Path('linter.py'))
+    except ModuleNotFoundError as e:
+        raise click.ClickException(
+            f"{e.msg}. Install using linter_requirements.txt"
+        )
+
+    linter.DiffLinter(branch).run_lint(uncommitted)
 
 @click.command()
 @click.option(
@@ -413,7 +518,7 @@ def ipython(ctx, ipython_args):
     util.run(["ipython", "--ignore-cwd",
               f"--TerminalIPythonApp.exec_lines={preimport}"] +
              list(ipython_args))
- 
+
 
 @click.command(context_settings={"ignore_unknown_options": True})
 @click.pass_context
@@ -425,3 +530,114 @@ def mypy(ctx):
     ctx.params['pytest_args'] = [os.path.join('numpy', 'typing')]
     ctx.params['markexpr'] = 'full'
     ctx.forward(test)
+
+@click.command(context_settings={
+    'ignore_unknown_options': True
+})
+@click.option(
+    "--with-scipy-openblas", type=click.Choice(["32", "64"]),
+    default=None, required=True,
+    help="Build with pre-installed scipy-openblas32 or scipy-openblas64 wheel"
+)
+def config_openblas(with_scipy_openblas):
+    """🔧 Create .openblas/scipy-openblas.pc file
+
+    Also create _distributor_init_local.py
+
+    Requires a pre-installed scipy-openblas64 or scipy-openblas32
+    """
+    _config_openblas(with_scipy_openblas)
+
+
+def _config_openblas(blas_variant):
+    import importlib
+    basedir = os.getcwd()
+    openblas_dir = os.path.join(basedir, ".openblas")
+    pkg_config_fname = os.path.join(openblas_dir, "scipy-openblas.pc")
+    if blas_variant:
+        module_name = f"scipy_openblas{blas_variant}"
+        try:
+            openblas = importlib.import_module(module_name)
+        except ModuleNotFoundError:
+            raise RuntimeError(f"'pip install {module_name} first")
+        local = os.path.join(basedir, "numpy", "_distributor_init_local.py")
+        with open(local, "wt", encoding="utf8") as fid:
+            fid.write(f"import {module_name}\n")
+        os.makedirs(openblas_dir, exist_ok=True)
+        with open(pkg_config_fname, "wt", encoding="utf8") as fid:
+            fid.write(openblas.get_pkg_config().replace("\\", "/"))
+
+
+@click.command()
+@click.option(
+    "-v", "--version-override",
+    help="NumPy version of release",
+    required=False
+)
+@click.pass_context
+def notes(ctx, version_override):
+    """🎉 Generate release notes and validate
+
+    \b
+    Example:
+
+    \b
+    $ spin notes --version-override 2.0
+
+    \b
+    To automatically pick the version
+
+    \b
+    $ spin notes
+    """
+    project_config = util.get_config()
+    version = version_override or project_config['project.version']
+
+    click.secho(
+        f"Generating release notes for NumPy {version}",
+        bold=True, fg="bright_green",
+    )
+
+    # Check if `towncrier` is installed
+    if not shutil.which("towncrier"):
+        raise click.ClickException(
+            f"please install `towncrier` to use this command"
+        )
+
+    click.secho(
+        f"Reading upcoming changes from {project_config['tool.towncrier.directory']}",
+        bold=True, fg="bright_yellow"
+    )
+    # towncrier build --version 2.1 --yes
+    cmd = ["towncrier", "build", "--version", version, "--yes"]
+    try:
+        p = util.run(
+                cmd=cmd,
+                sys_exit=False,
+                output=True,
+                encoding="utf-8"
+            )
+    except subprocess.SubprocessError as e:
+        raise click.ClickException(
+            f"`towncrier` failed returned {e.returncode} with error `{e.stderr}`"
+        )
+
+    output_path = project_config['tool.towncrier.filename'].format(version=version)
+    click.secho(
+        f"Release notes successfully written to {output_path}",
+        bold=True, fg="bright_yellow"
+    )
+
+    click.secho(
+        "Verifying consumption of all news fragments",
+        bold=True, fg="bright_green",
+    )
+
+    try:
+        test_notes = _get_numpy_tools(pathlib.Path('ci', 'test_all_newsfragments_used.py'))
+    except ModuleNotFoundError as e:
+        raise click.ClickException(
+            f"{e.msg}. Install the missing packages to use this command."
+        )
+
+    test_notes.main()
